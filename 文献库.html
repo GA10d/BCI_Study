@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="BCI 文献库：按 DOI 去重，记录论文来源、简介、阅读状态与本地文件。">
+  <title>BCI 文献库与阅读记录</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070d1d'/%3E%3Cpath d='M13 15h34a5 5 0 0 1 5 5v29H18a5 5 0 0 0-5 5V15Z' fill='none' stroke='%235be7c4' stroke-width='4'/%3E%3Cpath d='M22 27h20M22 36h15' stroke='%2362c8ff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #070d1d;
+      --panel: #0d1730;
+      --panel-2: #111e3b;
+      --ink: #eaf0ff;
+      --muted: #9eabc7;
+      --dim: #70809f;
+      --mint: #5be7c4;
+      --cyan: #62c8ff;
+      --coral: #ff8e72;
+      --gold: #ffd37d;
+      --line: rgba(154,178,226,.17);
+      --max: 1180px;
+    }
+    * { box-sizing: border-box; }
+    html { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 82% 5%, rgba(98,200,255,.12), transparent 28rem),
+        radial-gradient(circle at 10% 48%, rgba(91,231,196,.07), transparent 25rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      line-height: 1.6;
+    }
+    a { color: inherit; }
+    button, input, select { font: inherit; }
+    ::selection { color: #07111f; background: var(--mint); }
+    .shell { width: min(calc(100% - 32px), var(--max)); margin: 0 auto; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      min-height: 68px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 850; letter-spacing: .04em; }
+    .brand svg { width: 26px; color: var(--mint); }
+    .back { color: var(--muted); font-size: .84rem; text-decoration: none; }
+    .back:hover { color: var(--mint); }
+
+    main { padding: 50px 0 80px; }
+    .intro { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 28px; align-items: end; margin-bottom: 31px; }
+    .eyebrow { margin: 0 0 8px; color: var(--mint); font-size: .74rem; font-weight: 850; letter-spacing: .15em; text-transform: uppercase; }
+    h1 { margin: 0 0 10px; font-size: clamp(2.25rem, 5vw, 4.5rem); line-height: 1; letter-spacing: -.05em; }
+    .intro p { max-width: 690px; margin: 0; color: var(--muted); }
+    .source-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      color: var(--muted);
+      font-size: .82rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .source-link:hover { border-color: var(--mint); color: var(--mint); }
+
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px; }
+    .stat { padding: 18px 20px; border: 1px solid var(--line); border-radius: 15px; background: rgba(13,23,48,.73); }
+    .stat strong { display: block; margin-bottom: 4px; color: var(--mint); font-size: 1.75rem; line-height: 1; }
+    .stat:nth-child(2) strong { color: var(--cyan); }
+    .stat:nth-child(3) strong { color: var(--coral); }
+    .stat:nth-child(4) strong { color: var(--gold); }
+    .stat span { color: var(--muted); font-size: .8rem; }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(230px, 1fr) 190px 190px;
+      gap: 10px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(13,23,48,.83);
+    }
+    .field { position: relative; }
+    .field svg { position: absolute; left: 13px; top: 50%; width: 18px; color: var(--dim); transform: translateY(-50%); pointer-events: none; }
+    input, select {
+      width: 100%;
+      min-height: 44px;
+      padding: 0 13px;
+      color: var(--ink);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      outline: 0;
+      background: #091329;
+    }
+    input { padding-left: 42px; }
+    input:focus, select:focus { border-color: var(--mint); box-shadow: 0 0 0 3px rgba(91,231,196,.1); }
+    input::placeholder { color: var(--dim); }
+
+    .result-line { display: flex; justify-content: space-between; gap: 18px; margin: 20px 2px 12px; color: var(--dim); font-size: .79rem; }
+    .result-line b { color: var(--ink); }
+
+    .library-list { display: grid; gap: 14px; }
+    .paper {
+      display: grid;
+      grid-template-columns: 165px minmax(0,1fr) 190px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: linear-gradient(140deg, rgba(17,30,59,.92), rgba(9,18,38,.94));
+      transition: border-color .2s ease, transform .2s ease;
+    }
+    .paper:hover { border-color: rgba(91,231,196,.48); transform: translateY(-2px); }
+    .paper-meta { padding: 23px; border-right: 1px solid var(--line); }
+    .year { margin-bottom: 15px; color: var(--mint); font-size: 2rem; font-weight: 900; line-height: 1; }
+    .status { display: inline-flex; align-items: center; gap: 7px; margin-bottom: 12px; padding: 5px 9px; border: 1px solid rgba(255,211,125,.28); border-radius: 99px; color: var(--gold); font-size: .72rem; font-weight: 800; }
+    .status::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .category { color: var(--muted); font-size: .77rem; }
+    .paper-main { min-width: 0; padding: 23px 26px; }
+    .paper-main h2 { margin: 0 0 9px; font-size: clamp(1.12rem, 2vw, 1.48rem); line-height: 1.35; letter-spacing: -.015em; }
+    .authors { margin: 0 0 12px; color: var(--cyan); font-size: .86rem; }
+    .summary { margin: 0 0 14px; color: #c2cce0; font-size: .93rem; }
+    .doi { display: inline-flex; padding: 4px 8px; border-radius: 7px; color: var(--muted); background: rgba(98,200,255,.07); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: .73rem; word-break: break-all; }
+    .paper-side { display: flex; flex-direction: column; justify-content: center; gap: 9px; padding: 22px; border-left: 1px solid var(--line); }
+    .btn { display: flex; justify-content: space-between; gap: 10px; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); font-size: .78rem; font-weight: 730; text-decoration: none; }
+    .btn:hover { color: var(--mint); border-color: var(--mint); }
+    .btn.primary { color: #07131e; border-color: var(--mint); background: var(--mint); }
+    .added { margin-top: 5px; color: var(--dim); font-size: .7rem; }
+
+    .empty { display: none; padding: 55px 25px; text-align: center; border: 1px dashed var(--line); border-radius: 18px; color: var(--muted); }
+    .empty strong { display: block; margin-bottom: 6px; color: var(--ink); }
+
+    .rules { margin-top: 33px; padding: 24px; border: 1px solid var(--line); border-radius: 17px; background: rgba(13,23,48,.56); }
+    .rules h2 { margin: 0 0 13px; font-size: 1rem; }
+    .rules ol { margin: 0; padding-left: 20px; color: var(--muted); font-size: .86rem; }
+    .rules li + li { margin-top: 6px; }
+    footer { padding: 27px 0 45px; color: var(--dim); font-size: .77rem; border-top: 1px solid var(--line); }
+
+    @media (max-width: 880px) {
+      .stats { grid-template-columns: repeat(2, 1fr); }
+      .paper { grid-template-columns: 130px minmax(0,1fr); }
+      .paper-side { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; border-top: 1px solid var(--line); border-left: 0; }
+      .paper-side .btn { flex: 1 1 160px; }
+    }
+    @media (max-width: 650px) {
+      .shell { width: min(calc(100% - 22px), var(--max)); }
+      .topbar { min-height: 58px; }
+      .brand { font-size: .84rem; }
+      main { padding-top: 34px; }
+      .intro { grid-template-columns: 1fr; gap: 17px; }
+      .source-link { width: fit-content; }
+      .toolbar { grid-template-columns: 1fr; }
+      .paper { grid-template-columns: 1fr; }
+      .paper-meta { display: grid; grid-template-columns: auto auto 1fr; gap: 12px; align-items: center; padding-bottom: 0; border-right: 0; }
+      .year, .status { margin: 0; }
+      .category { text-align: right; }
+      .paper-main { padding: 18px 20px 22px; }
+      .paper-side { padding: 17px 20px; }
+    }
+  </style>
+</head>
+<body>
+  <header class="shell topbar">
+    <div class="brand">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M13 15h34a5 5 0 0 1 5 5v29H18a5 5 0 0 0-5 5V15Z" fill="none" stroke="currentColor" stroke-width="4"/><path d="M22 27h20M22 36h15" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+      BCI 文献库
+    </div>
+    <a class="back" href="index.html">← 返回学习档案</a>
+  </header>
+
+  <main class="shell">
+    <section class="intro">
+      <div>
+        <p class="eyebrow">Literature registry · DOI first</p>
+        <h1>文献库与阅读记录</h1>
+        <p>先按 DOI 去重，再按标题核对。这里集中查看推荐来源、论文版本、本地文件与阅读状态。</p>
+      </div>
+      <a class="source-link" href="文献库.md">查看底层 Markdown 总账 ↗</a>
+    </section>
+
+    <section class="stats" aria-label="文献库统计">
+      <div class="stat"><strong id="totalCount">3</strong><span>已收录论文</span></div>
+      <div class="stat"><strong>3</strong><span>本地全文</span></div>
+      <div class="stat"><strong>0</strong><span>已读 / 精读完成</span></div>
+      <div class="stat"><strong>3</strong><span>当前待读</span></div>
+    </section>
+
+    <section class="toolbar" aria-label="文献筛选">
+      <label class="field">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="m16.5 16.5 4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="search" type="search" placeholder="搜索标题、作者、DOI 或关键词" aria-label="搜索文献">
+      </label>
+      <select id="statusFilter" aria-label="按阅读状态筛选">
+        <option value="all">全部阅读状态</option>
+        <option value="待读">待读</option>
+        <option value="阅读中">阅读中</option>
+        <option value="已读">已读</option>
+        <option value="精读完成">精读完成</option>
+        <option value="复现中">复现中</option>
+      </select>
+      <select id="categoryFilter" aria-label="按类别筛选">
+        <option value="all">全部类别</option>
+        <option value="经典">经典</option>
+        <option value="必读">必读</option>
+        <option value="前沿">前沿</option>
+      </select>
+    </section>
+
+    <div class="result-line"><span>找到 <b id="visibleCount">3</b> 篇</span><span>更新于 2026-09-28</span></div>
+
+    <section class="library-list" id="libraryList" aria-live="polite">
+      <article class="paper" data-status="待读" data-category="经典" data-search="talking off the top of your head farwell donchin p300 eeg 拼写器 10.1016/0013-4694(88)90149-6">
+        <div class="paper-meta"><div class="year">1988</div><div class="status">待读</div><div class="category">经典 · P300 · EEG</div></div>
+        <div class="paper-main">
+          <h2>Talking off the top of your head: toward a mental prosthesis utilizing event-related brain potentials</h2>
+          <p class="authors">Lawrence A. Farwell · Emanuel Donchin</p>
+          <p class="summary">用行列闪烁诱发 P300，并将脑电实时转换为字符选择，奠定了 P300 拼写器的基本范式。</p>
+          <span class="doi">10.1016/0013-4694(88)90149-6</span>
+        </div>
+        <div class="paper-side">
+          <a class="btn primary" href="2026-09-28/papers/01_classic_farwell_donchin_1988_p300_speller.pdf" target="_blank">本地 PDF <span>↗</span></a>
+          <a class="btn" href="https://digitalcommons.usf.edu/psy_facpub/293/" target="_blank" rel="noreferrer">在线来源 <span>↗</span></a>
+          <a class="btn" href="2026-09-28/index.html#papers">首次推荐 <span>001</span></a>
+          <div class="added">收录：2026-09-28</div>
+        </div>
+      </article>
+
+      <article class="paper" data-status="待读" data-category="必读" data-search="high-performance brain-to-text communication via handwriting willett avansino hochberg henderson shenoy 运动解码 皮层内 手写 10.1038/s41586-021-03506-2">
+        <div class="paper-meta"><div class="year">2021</div><div class="status">待读</div><div class="category">必读 · 皮层内 · 手写</div></div>
+        <div class="paper-main">
+          <h2>High-performance brain-to-text communication via handwriting</h2>
+          <p class="authors">Francis R. Willett · Donald T. Avansino · Leigh R. Hochberg · Jaimie M. Henderson · Krishna V. Shenoy</p>
+          <p class="summary">从尝试手写时的运动皮层活动中解码文字，实现每分钟 90 个字符的在线脑到文本通信。</p>
+          <span class="doi">10.1038/s41586-021-03506-2</span>
+        </div>
+        <div class="paper-side">
+          <a class="btn primary" href="2026-09-28/papers/02_must_read_willett_2021_handwriting_bci_preprint.pdf" target="_blank">作者预印本 <span>↗</span></a>
+          <a class="btn" href="https://www.nature.com/articles/s41586-021-03506-2" target="_blank" rel="noreferrer">Nature 最终版 <span>↗</span></a>
+          <a class="btn" href="2026-09-28/index.html#papers">首次推荐 <span>001</span></a>
+          <div class="added">收录：2026-09-28</div>
+        </div>
+      </article>
+
+      <article class="paper" data-status="待读" data-category="前沿" data-search="simultaneous speech and gesture decoding multimodal communication paralysis brosler liu silva hallinan kurtz-miott dunkel wilker tu-chan ganguly chang ecog 语音 手势 多模态 10.1038/s41593-026-02446-2">
+        <div class="paper-meta"><div class="year">2026</div><div class="status">待读</div><div class="category">前沿 · ECoG · 多模态</div></div>
+        <div class="paper-main">
+          <h2>Simultaneous speech and gesture decoding for multimodal communication in paralysis</h2>
+          <p class="authors">Samantha C. Brosler · Jessie R. Liu · Alexander B. Silva · Irina P. Hallinan · Cady M. Kurtz-Miott · Jonah F. B. Dunkel Wilker · Adelyn Tu-Chan · Karunesh Ganguly · Edward F. Chang</p>
+          <p class="summary">用同一块高密度 ECoG 阵列同时解码尝试说话与手势，使瘫痪参与者能够进行并行多模态表达。</p>
+          <span class="doi">10.1038/s41593-026-02446-2</span>
+        </div>
+        <div class="paper-side">
+          <a class="btn primary" href="2026-09-28/papers/03_frontier_brosler_2026_speech_gesture_bci.pdf" target="_blank">本地 PDF <span>↗</span></a>
+          <a class="btn" href="https://www.nature.com/articles/s41593-026-02446-2" target="_blank" rel="noreferrer">在线来源 <span>↗</span></a>
+          <a class="btn" href="2026-09-28/index.html#papers">首次推荐 <span>001</span></a>
+          <div class="added">收录：2026-09-28</div>
+        </div>
+      </article>
+    </section>
+
+    <div class="empty" id="emptyState"><strong>没有匹配的文献</strong>换一个关键词或清除筛选条件。</div>
+
+    <section class="rules">
+      <h2>去重与版本规则</h2>
+      <ol>
+        <li>DOI 相同视为同一篇论文；预印本和最终期刊版合并在一条记录中。</li>
+        <li>没有 DOI 时，比较去除大小写、标点和多余空格后的标题。</li>
+        <li>同一论文再次出现在日报中时，标注为“回顾”或“复现”，不作为新推荐。</li>
+      </ol>
+    </section>
+  </main>
+
+  <footer class="shell">BCI Daily Study · Literature Registry</footer>
+
+  <script>
+    const search = document.querySelector('#search');
+    const statusFilter = document.querySelector('#statusFilter');
+    const categoryFilter = document.querySelector('#categoryFilter');
+    const papers = [...document.querySelectorAll('.paper')];
+    const visibleCount = document.querySelector('#visibleCount');
+    const emptyState = document.querySelector('#emptyState');
+
+    function applyFilters() {
+      const query = search.value.trim().toLocaleLowerCase();
+      const status = statusFilter.value;
+      const category = categoryFilter.value;
+      let count = 0;
+      papers.forEach(paper => {
+        const matchesQuery = !query || paper.dataset.search.toLocaleLowerCase().includes(query) || paper.innerText.toLocaleLowerCase().includes(query);
+        const matchesStatus = status === 'all' || paper.dataset.status === status;
+        const matchesCategory = category === 'all' || paper.dataset.category === category;
+        const visible = matchesQuery && matchesStatus && matchesCategory;
+        paper.hidden = !visible;
+        if (visible) count += 1;
+      });
+      visibleCount.textContent = count;
+      emptyState.style.display = count ? 'none' : 'block';
+    }
+    search.addEventListener('input', applyFilters);
+    statusFilter.addEventListener('change', applyFilters);
+    categoryFilter.addEventListener('change', applyFilters);
+  </script>
+</body>
+</html>

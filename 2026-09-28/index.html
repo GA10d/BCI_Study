@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="BCI 每日研习 #001：闭环信号链、三篇论文与跨会话泛化问题。">
+  <title>BCI 每日研习 #001 · 2026-09-28</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23070d1d'/%3E%3Cpath d='M7 34h10l5-14 8 29 7-23 5 8h15' fill='none' stroke='%235be7c4' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --ink: #eaf0ff;
+      --muted: #9eabc7;
+      --dim: #70809f;
+      --bg: #070d1d;
+      --panel: #0d1730;
+      --panel-2: #111e3b;
+      --line: rgba(154, 178, 226, .17);
+      --mint: #5be7c4;
+      --cyan: #62c8ff;
+      --coral: #ff8e72;
+      --gold: #ffd37d;
+      --shadow: 0 20px 50px rgba(0, 0, 0, .28);
+      --radius: 22px;
+      --max: 1180px;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 80% 4%, rgba(98, 200, 255, .12), transparent 27rem),
+        radial-gradient(circle at 8% 30%, rgba(91, 231, 196, .08), transparent 24rem),
+        var(--bg);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      line-height: 1.75;
+    }
+
+    a { color: inherit; }
+    button, input { font: inherit; }
+    ::selection { color: #07111f; background: var(--mint); }
+
+    .progress {
+      position: fixed;
+      z-index: 99;
+      top: 0;
+      left: 0;
+      width: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--mint), var(--cyan), var(--coral));
+    }
+
+    .shell {
+      width: min(calc(100% - 32px), var(--max));
+      margin: 0 auto;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      min-height: 68px;
+      color: var(--muted);
+      font-size: .83rem;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand { display: flex; align-items: center; gap: 11px; font-weight: 800; color: var(--ink); }
+    .brand-mark { width: 27px; height: 27px; color: var(--mint); }
+    .issue { color: var(--mint); }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(270px, .75fr);
+      gap: 40px;
+      padding: 68px 0 48px;
+      align-items: end;
+    }
+
+    .eyebrow {
+      margin: 0 0 14px;
+      color: var(--mint);
+      font-size: .78rem;
+      font-weight: 850;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 {
+      margin-bottom: 22px;
+      max-width: 780px;
+      font-size: clamp(2.7rem, 7vw, 6rem);
+      line-height: .98;
+      letter-spacing: -.055em;
+    }
+    h1 span { color: var(--mint); white-space: nowrap; }
+    .lede { max-width: 720px; color: #c4cee2; font-size: clamp(1.02rem, 2vw, 1.28rem); }
+
+    .hero-card {
+      padding: 26px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(145deg, rgba(17, 30, 59, .94), rgba(9, 18, 38, .92));
+      box-shadow: var(--shadow);
+    }
+    .hero-card strong { display: block; margin-bottom: 10px; font-size: 1.16rem; }
+    .hero-card p { color: var(--muted); font-size: .93rem; }
+    .timebar { display: grid; gap: 9px; margin-top: 20px; }
+    .timebar div { display: grid; grid-template-columns: 58px 1fr; gap: 12px; color: var(--muted); font-size: .86rem; }
+    .timebar b { color: var(--ink); }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 58px;
+    }
+    .stat {
+      min-height: 142px;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(13, 23, 48, .72);
+    }
+    .stat .big { display: block; margin-bottom: 8px; color: var(--mint); font-size: 2.2rem; font-weight: 900; line-height: 1; }
+    .stat:nth-child(2) .big { color: var(--cyan); }
+    .stat:nth-child(3) .big { color: var(--coral); }
+    .stat small { color: var(--muted); }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 210px minmax(0, 1fr);
+      gap: 46px;
+      align-items: start;
+    }
+    .layout > * { min-width: 0; }
+    nav {
+      position: sticky;
+      top: 28px;
+      max-width: 100%;
+      padding: 18px 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    nav span { display: block; margin-bottom: 12px; color: var(--dim); font-size: .7rem; font-weight: 800; letter-spacing: .13em; text-transform: uppercase; }
+    nav a {
+      display: block;
+      padding: 7px 0;
+      color: var(--muted);
+      font-size: .9rem;
+      text-decoration: none;
+      transition: .2s ease;
+    }
+    nav a:hover, nav a.active { color: var(--mint); transform: translateX(4px); }
+
+    main section { margin-bottom: 86px; scroll-margin-top: 28px; }
+    .section-head { display: grid; grid-template-columns: 64px 1fr; gap: 18px; margin-bottom: 30px; align-items: start; }
+    .section-no { color: var(--mint); font-size: .78rem; font-weight: 900; letter-spacing: .12em; }
+    h2 { margin-bottom: 8px; font-size: clamp(1.9rem, 4vw, 3.15rem); line-height: 1.08; letter-spacing: -.035em; }
+    .section-head p { color: var(--muted); }
+    h3 { margin-bottom: 10px; font-size: 1.28rem; line-height: 1.3; }
+
+    .callout {
+      padding: 24px 26px;
+      border-left: 3px solid var(--mint);
+      border-radius: 0 16px 16px 0;
+      background: rgba(91, 231, 196, .07);
+    }
+    .callout p:last-child { margin-bottom: 0; }
+    .callout.coral { border-color: var(--coral); background: rgba(255, 142, 114, .07); }
+
+    .pipeline {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(86px, 1fr));
+      gap: 10px;
+      margin: 28px 0;
+      overflow-x: auto;
+      padding-bottom: 8px;
+    }
+    .node {
+      position: relative;
+      min-width: 106px;
+      min-height: 118px;
+      padding: 16px 13px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: var(--panel);
+    }
+    .node:not(:last-child)::after {
+      content: "→";
+      position: absolute;
+      z-index: 2;
+      top: 42%;
+      right: -13px;
+      color: var(--mint);
+      font-weight: 900;
+    }
+    .node b { display: block; margin-bottom: 6px; color: var(--ink); font-size: .88rem; }
+    .node small { color: var(--muted); line-height: 1.45; }
+    .node:last-child { border-color: rgba(91, 231, 196, .55); }
+
+    .table-wrap { overflow-x: auto; margin: 28px 0; border: 1px solid var(--line); border-radius: 17px; }
+    table { width: 100%; min-width: 670px; border-collapse: collapse; background: rgba(13, 23, 48, .66); }
+    th, td { padding: 16px 18px; text-align: left; border-bottom: 1px solid var(--line); }
+    th { color: var(--mint); font-size: .76rem; letter-spacing: .08em; text-transform: uppercase; }
+    td { color: #bdc8dd; font-size: .9rem; vertical-align: top; }
+    tbody tr:last-child td { border-bottom: 0; }
+
+    details {
+      margin-top: 12px;
+      padding: 17px 19px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: rgba(13, 23, 48, .6);
+    }
+    summary { cursor: pointer; color: var(--ink); font-weight: 760; }
+    details p { margin: 14px 0 0; color: var(--muted); }
+
+    .timeline {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+    .era { padding: 17px; border-top: 2px solid var(--mint); background: rgba(13, 23, 48, .55); }
+    .era:nth-child(2) { border-color: var(--cyan); }
+    .era:nth-child(3) { border-color: var(--coral); }
+    .era b { display: block; margin-bottom: 5px; font-size: 1.1rem; }
+    .era small { color: var(--muted); }
+
+    .paper {
+      margin-bottom: 28px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: linear-gradient(150deg, rgba(17, 30, 59, .9), rgba(10, 19, 40, .92));
+      box-shadow: var(--shadow);
+    }
+    .paper-top { padding: 27px 29px 23px; border-bottom: 1px solid var(--line); }
+    .paper-top h3 { max-width: 800px; margin: 14px 0 10px; font-size: clamp(1.35rem, 3vw, 2rem); }
+    .meta { color: var(--muted); font-size: .86rem; }
+    .tag { display: inline-flex; padding: 5px 10px; border: 1px solid rgba(91, 231, 196, .38); border-radius: 99px; color: var(--mint); font-size: .68rem; font-weight: 850; letter-spacing: .1em; text-transform: uppercase; }
+    .tag.blue { color: var(--cyan); border-color: rgba(98, 200, 255, .38); }
+    .tag.coral { color: var(--coral); border-color: rgba(255, 142, 114, .4); }
+    .paper-body { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); }
+    .paper-body > div { padding: 25px 29px; background: #0d1730; }
+    .paper-body p, .paper-body li { color: #bdc8dd; font-size: .92rem; }
+    .paper-body ul { margin: 0; padding-left: 18px; }
+    .paper-body li + li { margin-top: 6px; }
+    .key { color: var(--ink) !important; font-size: 1rem !important; }
+    .paper-actions { display: flex; flex-wrap: wrap; gap: 10px; padding: 20px 29px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 15px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      color: var(--ink);
+      background: rgba(255,255,255,.025);
+      font-size: .82rem;
+      font-weight: 760;
+      text-decoration: none;
+      transition: .2s ease;
+    }
+    .btn:hover { border-color: var(--mint); color: var(--mint); transform: translateY(-2px); }
+    .btn.primary { color: #07131e; border-color: var(--mint); background: var(--mint); }
+    .btn.primary:hover { color: #07131e; filter: brightness(1.08); }
+    .note { color: var(--gold); font-size: .82rem; }
+
+    .problem-grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 18px; margin: 28px 0; }
+    .problem-card { padding: 25px; border: 1px solid var(--line); border-radius: 18px; background: rgba(13, 23, 48, .78); }
+    .problem-card ol, .problem-card ul { padding-left: 20px; color: #bdc8dd; }
+    .problem-card li + li { margin-top: 7px; }
+    .metric-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .metric-list span { padding: 6px 10px; border-radius: 8px; color: var(--muted); background: rgba(98, 200, 255, .08); font-size: .78rem; }
+
+    .checklist { display: grid; grid-template-columns: repeat(3, 1fr); gap: 13px; }
+    .check {
+      display: flex;
+      gap: 12px;
+      padding: 18px;
+      cursor: pointer;
+      border: 1px solid var(--line);
+      border-radius: 15px;
+      background: rgba(13, 23, 48, .62);
+    }
+    .check input { width: 18px; height: 18px; accent-color: var(--mint); }
+    .check span { color: var(--muted); font-size: .86rem; }
+    .check b { display: block; color: var(--ink); font-size: .94rem; }
+
+    .sources { margin: 0; padding-left: 20px; color: var(--muted); }
+    .sources li + li { margin-top: 12px; }
+    .sources a { color: var(--cyan); text-underline-offset: 3px; }
+
+    footer { margin-top: 40px; padding: 35px 0 55px; color: var(--dim); font-size: .8rem; border-top: 1px solid var(--line); }
+    .footer-row { display: flex; justify-content: space-between; gap: 20px; }
+
+    @media (max-width: 850px) {
+      .hero, .problem-grid { grid-template-columns: 1fr; }
+      .layout { grid-template-columns: 1fr; gap: 32px; }
+      nav { position: static; display: flex; gap: 15px; overflow-x: auto; white-space: nowrap; }
+      nav span { display: none; }
+      nav a { flex: 0 0 auto; }
+      .paper-body { grid-template-columns: 1fr; }
+      .stats, .timeline, .checklist { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 560px) {
+      .shell { width: min(calc(100% - 22px), var(--max)); }
+      .topbar { min-height: 58px; font-size: .68rem; }
+      .hero { padding-top: 45px; }
+      h1 { font-size: 2.75rem; }
+      .section-head { grid-template-columns: 1fr; gap: 3px; }
+      .paper-top, .paper-body > div, .paper-actions { padding-left: 19px; padding-right: 19px; }
+      .footer-row { flex-direction: column; }
+    }
+
+    @media print {
+      :root { --ink: #101729; --muted: #42516b; --bg: #fff; --panel: #fff; --panel-2: #fff; --line: #d8deea; }
+      body { background: #fff; color: #101729; }
+      .progress, nav, .checklist { display: none; }
+      .layout { display: block; }
+      .hero { padding-top: 30px; }
+      .paper, .hero-card, .stat, .problem-card { box-shadow: none; break-inside: avoid; background: #fff; }
+      .paper-body > div { background: #fff; }
+      a { text-decoration: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" aria-hidden="true"></div>
+
+  <header class="shell">
+    <div class="topbar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 64 64" aria-hidden="true"><path d="M3 34h13l6-17 9 34 8-28 6 11h16" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        BCI Daily Study
+      </div>
+      <div><span class="issue">Issue 001</span> · 2026-09-28</div>
+    </div>
+
+    <div class="hero">
+      <div>
+        <p class="eyebrow">今日主线 · From signal to agency</p>
+        <h1>BCI 不是读心术，<br>它是一个<span>闭环系统</span>。</h1>
+        <p class="lede">从 P300 拼写器，到手写轨迹解码，再到同时输出语言与手势：三篇论文恰好串起 BCI 从“单一选择”走向“自然、多模态表达”的路径。</p>
+      </div>
+      <aside class="hero-card">
+        <strong>今天约 100 分钟</strong>
+        <p>先搭框架，再读证据，最后把一个开放问题变成可执行的小实验。</p>
+        <div class="timebar">
+          <div><b>15 min</b><span>闭环与信号模态</span></div>
+          <div><b>65 min</b><span>三篇论文精读</span></div>
+          <div><b>20 min</b><span>问题与实验设计</span></div>
+        </div>
+      </aside>
+    </div>
+
+    <div class="stats" aria-label="今日三个关键数字">
+      <div class="stat"><span class="big">1988</span><b>P300 拼写器</b><br><small>一条非肌肉依赖沟通路线被清楚展示</small></div>
+      <div class="stat"><span class="big">90</span><b>字符 / 分钟</b><br><small>2021 手写 BCI 的在线速度</small></div>
+      <div class="stat"><span class="big">2×</span><b>并行表达通道</b><br><small>2026 年同一植入体同时解码语音与手势</small></div>
+    </div>
+  </header>
+
+  <div class="shell layout">
+    <nav aria-label="文章目录">
+      <span>Contents</span>
+      <a href="#foundation">01 · 基础知识</a>
+      <a href="#papers">02 · 三篇论文</a>
+      <a href="#problem">03 · 今日问题</a>
+      <a href="#reading">04 · 阅读任务</a>
+      <a href="#sources">05 · 来源说明</a>
+    </nav>
+
+    <main>
+      <section id="foundation">
+        <div class="section-head">
+          <div class="section-no">01 / 基础</div>
+          <div><h2>BCI 的闭环信号链</h2><p>先知道一个系统由什么组成，再去比较算法和论文，学习会快很多。</p></div>
+        </div>
+
+        <div class="callout">
+          <p><strong>一句话定义：</strong>脑机接口把与任务相关的脑活动变成外部设备可执行的指令，并把结果反馈给使用者，让人和机器共同适应。</p>
+          <p>它通常解码的是实验任务里被定义过的<strong>意图或状态</strong>，例如“我想选这个字母”或“我正尝试写这个字”，并不能读取任意、私密的思想。</p>
+        </div>
+
+        <div class="pipeline" aria-label="BCI 闭环信号链">
+          <div class="node"><b>① 任务范式</b><small>看闪烁目标、想象运动、尝试说话</small></div>
+          <div class="node"><b>② 采集</b><small>EEG、ECoG 或皮层内电极</small></div>
+          <div class="node"><b>③ 预处理</b><small>滤波、去伪迹、分段</small></div>
+          <div class="node"><b>④ 表征</b><small>ERP、频谱、神经群体活动</small></div>
+          <div class="node"><b>⑤ 解码</b><small>分类、回归、序列模型</small></div>
+          <div class="node"><b>⑥ 输出</b><small>字母、光标、语音、手势</small></div>
+          <div class="node"><b>⑦ 反馈</b><small>用户学习，模型也适应</small></div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>模态</th><th>在哪里测</th><th>优势</th><th>代价 / 局限</th><th>本期对应</th></tr></thead>
+            <tbody>
+              <tr><td><strong>EEG</strong></td><td>头皮</td><td>无创、成本低、便于重复采集</td><td>信号弱，空间分辨率有限，易受伪迹影响</td><td>1988 P300</td></tr>
+              <tr><td><strong>ECoG</strong></td><td>皮层表面</td><td>信噪比和带宽较高，覆盖范围可观</td><td>需手术，长期部署与风险需权衡</td><td>2026 语音 + 手势</td></tr>
+              <tr><td><strong>皮层内</strong></td><td>电极进入皮层</td><td>可记录高分辨率神经群体活动</td><td>侵入性更高，稳定性与维护是难点</td><td>2021 手写</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>三个自测题</h3>
+        <details><summary>为什么“分类准确率最高”不一定等于“最好用”？</summary><p>真实 BCI 还要考虑延迟、输出速度、误触发、校准时间、用户疲劳和长期稳定性。一个慢但准确的系统，可能输给略低准确率却响应迅速、可连续使用的系统。</p></details>
+        <details><summary>闭环中的“反馈”为什么重要？</summary><p>用户会根据屏幕或设备反馈调整自己的策略，模型也会从新数据更新。BCI 性能是“人—机共同学习”的结果，不只是一个静态分类器的分数。</p></details>
+        <details><summary>侵入式一定比无创更好吗？</summary><p>它通常提供更高质量的信号，但“更好”取决于临床收益是否足以抵消手术风险、维护成本和长期稳定性问题。不同目标对应不同最优解。</p></details>
+      </section>
+
+      <section id="papers">
+        <div class="section-head">
+          <div class="section-no">02 / 论文</div>
+          <div><h2>三篇，三次能力跃迁</h2><p>经典不是“最老”，前沿也不只是“最新”；分类依据是它们分别改变了什么。</p></div>
+        </div>
+
+        <div class="timeline" aria-label="论文发展时间线">
+          <div class="era"><b>1988 · 能选择</b><small>P300 → 字母选择</small></div>
+          <div class="era"><b>2021 · 能书写</b><small>运动皮层 → 手写文本</small></div>
+          <div class="era"><b>2026 · 能并行表达</b><small>同一阵列 → 语音 + 手势</small></div>
+        </div>
+
+        <article class="paper">
+          <div class="paper-top">
+            <span class="tag">经典 / Classic</span>
+            <h3>Talking off the top of your head: toward a mental prosthesis utilizing event-related brain potentials</h3>
+            <div class="meta">Farwell &amp; Donchin · 1988 · Electroencephalography and Clinical Neurophysiology · DOI: 10.1016/0013-4694(88)90149-6</div>
+          </div>
+          <div class="paper-body">
+            <div><h3>做了什么</h3><p class="key">把 6×6 字符矩阵的行与列随机闪烁；当目标字符所在行/列出现时，P300 事件相关电位增强，据此锁定字符。</p><ul><li>4 位健康参与者，主要使用 Pz 单导 EEG。</li><li>展示实时、非肌肉依赖的字符选择。</li><li>报告约 95% 准确率、26 秒/字符（约 2.3 字符/分钟）。</li></ul></div>
+            <div><h3>为什么经典</h3><p>它把 oddball 范式、P300、矩阵刺激与在线拼写连成一个可运行系统，奠定了后来大量 P300 拼写器工作的基本形态。</p><p><strong>阅读时别忽略：</strong>样本很小，速度也远低于日常交流；高准确率依赖多次重复平均。</p></div>
+            <div><h3>你可以接着做</h3><ul><li>用公开 P300 数据复现 LDA / SWDA 基线。</li><li>画“重复次数—准确率—信息传输率”曲线。</li><li>比较不同 ERP 时间窗、电极数和停止策略。</li></ul></div>
+            <div><h3>建议精读</h3><p>先看摘要和系统示意，再看矩阵刺激与在线选择结果，最后读讨论：作者如何把一个神经科学效应转成通信接口。</p></div>
+          </div>
+          <div class="paper-actions">
+            <a class="btn primary" href="papers/01_classic_farwell_donchin_1988_p300_speller.pdf" target="_blank">打开本地 PDF ↗</a>
+            <a class="btn" href="https://digitalcommons.usf.edu/psy_facpub/293/" target="_blank" rel="noreferrer">官方馆藏页 ↗</a>
+          </div>
+        </article>
+
+        <article class="paper">
+          <div class="paper-top">
+            <span class="tag blue">最值得读 / Must-read</span>
+            <h3>High-performance brain-to-text communication via handwriting</h3>
+            <div class="meta">Willett et al. · 2021 · Nature 593, 249–254 · DOI: 10.1038/s41586-021-03506-2</div>
+          </div>
+          <div class="paper-body">
+            <div><h3>做了什么</h3><p class="key">让一位四肢瘫痪参与者尝试手写字符，用两块 96 通道皮层内阵列记录手部运动区活动，再用循环神经网络把神经序列转成文字。</p><ul><li>在线速度 90 字符/分钟。</li><li>在线原始准确率 94.1%；离线加入通用自动纠错后超过 99%。</li><li>把“手写动作的时空变化”当作可分离的神经轨迹。</li></ul></div>
+            <div><h3>为什么最值得读</h3><p>它不只是模型论文：从神经表征、数据设计、序列解码到在线闭环和语言模型，完整呈现了高性能 BCI 系统如何搭出来。</p><p><strong>阅读时别忽略：</strong>结果来自 1 位参与者；侵入式植入、会话适配与语言模型都会影响外推。</p></div>
+            <div><h3>你可以接着做</h3><ul><li>复现作者公开代码与数据的离线基线。</li><li>研究少校准、因果流式解码与不确定性拒答。</li><li>探索多语言、非拉丁字母或个体化字符集。</li></ul></div>
+            <div><h3>文件说明</h3><p>本地保存的是作者在 2020 年提交的 bioRxiv 预印本，题名含 <em>imagined handwriting</em>。上面的最终性能与引用信息按 2021 年同行评审后的 Nature 版本书写。</p><p class="note">这样既能离线全文阅读，也不会把预印本和最终版本混为一谈。</p></div>
+          </div>
+          <div class="paper-actions">
+            <a class="btn primary" href="papers/02_must_read_willett_2021_handwriting_bci_preprint.pdf" target="_blank">打开作者预印本 ↗</a>
+            <a class="btn" href="https://www.nature.com/articles/s41586-021-03506-2" target="_blank" rel="noreferrer">Nature 最终版 ↗</a>
+            <a class="btn" href="https://github.com/fwillett/handwritingBCI" target="_blank" rel="noreferrer">代码仓库 ↗</a>
+          </div>
+        </article>
+
+        <article class="paper">
+          <div class="paper-top">
+            <span class="tag coral">前沿 / Frontier</span>
+            <h3>Simultaneous speech and gesture decoding for multimodal communication in paralysis</h3>
+            <div class="meta">Brosler et al. · 2026 · Nature Neuroscience · Published 14 Sep 2026 · DOI: 10.1038/s41593-026-02446-2</div>
+          </div>
+          <div class="paper-body">
+            <div><h3>做了什么</h3><p class="key">用同一块高密度 ECoG 阵列，同时解码尝试说话与上肢/面部手势，并驱动个性化全身虚拟形象。</p><ul><li>3 位重度瘫痪参与者。</li><li>揭示“单独动作训练”不足以泛化到“同时表达”。</li><li>加入并行任务和跨模态静息数据，减少上下文变化与误触发。</li></ul></div>
+            <div><h3>为什么前沿</h3><p>核心创新不是又多分一个类别，而是让一个植入体承担两个并行表达通道，开始接近日常沟通中“说话 + 表情/动作”的组合。</p><p><strong>在线例证：</strong>主要参与者在 10 个手势与 10 个短语的同步复制任务中，手势约 66%、语音约 70%。</p></div>
+            <div><h3>你可以接着做</h3><ul><li>测试训练中未出现的语音—手势组合。</li><li>加入显式不确定性与“保持静息”拒答机制。</li><li>把固定短语扩展为连续、开放词表流式语音。</li><li>研究跨天、跨用户和居家环境中的上下文迁移。</li></ul></div>
+            <div><h3>阅读时别忽略</h3><p>样本仅 3 人，词汇和手势集合有限；在线并行演示主要集中在一位参与者。神经数据还受限访问，复现门槛较高。</p><p class="note">截至本报告日期，这篇论文发布仅两周，后续独立复现尚待积累。</p></div>
+          </div>
+          <div class="paper-actions">
+            <a class="btn primary" href="papers/03_frontier_brosler_2026_speech_gesture_bci.pdf" target="_blank">打开本地 PDF ↗</a>
+            <a class="btn" href="https://www.nature.com/articles/s41593-026-02446-2" target="_blank" rel="noreferrer">Nature Neuroscience ↗</a>
+          </div>
+        </article>
+      </section>
+
+      <section id="problem">
+        <div class="section-head">
+          <div class="section-no">03 / 问题</div>
+          <div><h2>神经信号会漂移：如何少校准、仍可靠？</h2><p>今天值得解决的问题：跨会话、跨用户泛化，以及模型面对“没见过的今天”时能否知道自己不确定。</p></div>
+        </div>
+
+        <div class="callout coral">
+          <p><strong>研究问题：</strong>能否用“共享表征 + 少量个体适配 + 不确定性拒答”，把每天的校准压到 5 分钟以内，同时保持稳定的在线性能？</p>
+        </div>
+
+        <div class="problem-grid">
+          <div class="problem-card">
+            <h3>适合初学者的第一版实验</h3>
+            <ol>
+              <li>选择一个包含多 session 的公开 P300 EEG 数据集。</li>
+              <li>建立同 session 的 LDA 基线，确认流程正确。</li>
+              <li>直接跨 session 测试，量化分布漂移造成的下降。</li>
+              <li>尝试 CORAL / 协方差对齐，或黎曼几何特征。</li>
+              <li>逐步加入 0、1、3、5 分钟新 session 校准数据，画校准—性能曲线。</li>
+            </ol>
+          </div>
+          <div class="problem-card">
+            <h3>不要只报 accuracy</h3>
+            <div class="metric-list">
+              <span>字符准确率 / CER</span><span>ITR</span><span>延迟</span><span>校准分钟数</span><span>误触发率</span><span>最差 session</span><span>拒答覆盖率</span><span>在线闭环</span>
+            </div>
+            <p style="margin-top:18px;color:var(--muted)">关键对照：同 session 上限、零样本跨 session、少样本适配。把平均值和最差情况一起报告。</p>
+          </div>
+        </div>
+
+        <h3>为什么它连接了今天三篇论文？</h3>
+        <p style="color:var(--muted)">P300 依赖稳定的诱发反应，皮层内手写需要跨日维持字符轨迹，语音—手势系统还要面对任务上下文变化。电极、注意力、姿态、组织反应和设备状态都会使数据分布改变；因此“今天训练、明天也能用”是从论文演示走向长期产品的共同门槛。</p>
+      </section>
+
+      <section id="reading">
+        <div class="section-head">
+          <div class="section-no">04 / 行动</div>
+          <div><h2>今天的最小完成线</h2><p>不要强求一次读懂全部方法；先建立能复述的骨架。</p></div>
+        </div>
+        <div class="checklist">
+          <label class="check"><input type="checkbox" data-check="foundation"><span><b>画出闭环</b>不看报告写出 7 个环节</span></label>
+          <label class="check"><input type="checkbox" data-check="papers"><span><b>读三篇图和摘要</b>各写一句“输入→输出”</span></label>
+          <label class="check"><input type="checkbox" data-check="question"><span><b>写下一个假设</b>如何减少跨 session 校准</span></label>
+        </div>
+      </section>
+
+      <section id="sources">
+        <div class="section-head">
+          <div class="section-no">05 / 来源</div>
+          <div><h2>来源与版本说明</h2><p>优先采用期刊官网、作者/机构页面与论文原文；访问日期为 2026-09-28。</p></div>
+        </div>
+        <ol class="sources">
+          <li>Farwell, L. A., &amp; Donchin, E. (1988). <a href="https://digitalcommons.usf.edu/psy_facpub/293/" target="_blank" rel="noreferrer">USF Digital Commons 馆藏与摘要</a>；DOI 10.1016/0013-4694(88)90149-6。</li>
+          <li>Willett, F. R. et al. (2021). <a href="https://www.nature.com/articles/s41586-021-03506-2" target="_blank" rel="noreferrer">Nature 最终版</a>；作者项目与预印本入口见 <a href="https://www.braingate.org/publications/high-performance-brain-to-text-communication-via-handwriting/" target="_blank" rel="noreferrer">BrainGate</a>。</li>
+          <li>Brosler, S. et al. (2026). <a href="https://www.nature.com/articles/s41593-026-02446-2" target="_blank" rel="noreferrer">Nature Neuroscience 开放获取全文</a>；DOI 10.1038/s41593-026-02446-2。</li>
+        </ol>
+      </section>
+    </main>
+  </div>
+
+  <footer class="shell">
+    <div class="footer-row"><span>BCI Daily Study · Issue 001</span><span>本报告用于学习，不构成医疗建议。</span></div>
+  </footer>
+
+  <script>
+    const progress = document.querySelector('.progress');
+    const navLinks = [...document.querySelectorAll('nav a')];
+    const sections = navLinks.map(a => document.querySelector(a.getAttribute('href')));
+
+    function updatePage() {
+      const max = document.documentElement.scrollHeight - innerHeight;
+      progress.style.width = `${max > 0 ? (scrollY / max) * 100 : 0}%`;
+      let current = sections[0];
+      sections.forEach(section => { if (section && section.getBoundingClientRect().top < 180) current = section; });
+      navLinks.forEach(a => a.classList.toggle('active', current && a.getAttribute('href') === `#${current.id}`));
+    }
+    addEventListener('scroll', updatePage, { passive: true });
+    addEventListener('resize', updatePage);
+    updatePage();
+
+    document.querySelectorAll('[data-check]').forEach(box => {
+      const key = `bci-2026-09-28-${box.dataset.check}`;
+      try { box.checked = localStorage.getItem(key) === '1'; } catch (_) {}
+      box.addEventListener('change', () => {
+        try { localStorage.setItem(key, box.checked ? '1' : '0'); } catch (_) {}
+      });
+    });
+  </script>
+</body>
+</html>
